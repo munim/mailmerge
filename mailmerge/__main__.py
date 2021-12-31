@@ -18,7 +18,11 @@ from . import exceptions
 @click.version_option()  # Auto detect version from setup.py
 @click.option(
     "--sample", is_flag=True, default=False,
-    help="Create sample template, database, and config",
+    help="Create sample template, CSV database, and config",
+)
+@click.option(
+    "--sample-json", "sample_json", is_flag=True, default=False,
+    help="Create sample template, JSON database, and config",
 )
 @click.option(
     "--dry-run/--no-dry-run", default=True,
@@ -48,7 +52,7 @@ from . import exceptions
     "--database", "database_path",
     default="mailmerge_database.csv",
     type=click.Path(),
-    help="database CSV (mailmerge_database.csv)",
+    help="database CSV or JSON (mailmerge_database.csv)",
 )
 @click.option(
     "--config", "config_path",
@@ -62,7 +66,7 @@ from . import exceptions
     type=click.Choice(["colorized", "text", "raw"]),
     help="Output format (colorized).",
 )
-def main(sample, dry_run, limit, no_limit, resume,
+def main(sample, sample_json, dry_run, limit, no_limit, resume,
          template_path, database_path, config_path,
          output_format):
     """
@@ -80,9 +84,12 @@ def main(sample, dry_run, limit, no_limit, resume,
     template_path = Path(template_path)
     database_path = Path(database_path)
     config_path = Path(config_path)
+    
+    if sample_json:
+        database_path = database_path.with_suffix(".json")
 
     # Make sure input files exist and provide helpful prompts
-    check_input_files(template_path, database_path, config_path, sample)
+    check_input_files(template_path, database_path, config_path, sample or sample_json)
 
     # Calculate start and stop indexes.  Start and stop are zero-based.  The
     # input --resume is one-based.
@@ -149,14 +156,14 @@ if __name__ == "__main__":
 def check_input_files(template_path, database_path, config_path, sample):
     """Check if input files are present and hint the user."""
     if sample:
-        create_sample_input_files(template_path, database_path, config_path)
+        create_sample_input_files(template_path, database_path, config_path, sample)
         sys.exit(0)
 
     if not template_path.exists():
         sys.exit(textwrap.dedent(f"""\
             Error: can't find template "{template_path}".
 
-            Create a sample (--sample) or specify a file (--template).
+            Create a sample (--sample or --sample-json) or specify a file (--template).
 
             See https://github.com/awdeorio/mailmerge for examples.\
         """))
@@ -165,7 +172,7 @@ def check_input_files(template_path, database_path, config_path, sample):
         sys.exit(textwrap.dedent(f"""\
             Error: can't find database "{database_path}".
 
-            Create a sample (--sample) or specify a file (--database).
+            Create a sample (--sample or --sample-json) or specify a file (--database).
 
             See https://github.com/awdeorio/mailmerge for examples.\
         """))
@@ -174,13 +181,73 @@ def check_input_files(template_path, database_path, config_path, sample):
         sys.exit(textwrap.dedent(f"""\
             Error: can't find config "{config_path}".
 
-            Create a sample (--sample) or specify a file (--config).
+            Create a sample (--sample or --sample-json) or specify a file (--config).
 
             See https://github.com/awdeorio/mailmerge for examples.\
         """))
 
 
-def create_sample_input_files(template_path, database_path, config_path):
+def create_sample_input_file_csv_database(database_path):
+    with database_path.open("w") as database_file:
+        database_file.write(textwrap.dedent("""\
+            email,name,amount_received
+            myself@mydomain.com,"Myself",800
+            bob@bobdomain.com,"Bob",600
+        """))
+
+def create_sample_input_file_json_database(database_path):
+    
+    with database_path.open("w") as database_file:
+        database_file.write(textwrap.dedent("""\
+            [
+                {
+                    "email": "johnsmith-27f6455e@mailinator.com",
+                    "name": "John Smith",
+                    "amount_received": 120,
+                    "breakdown":[
+                        {
+                            "date": "01.10.2021",
+                            "name": "Lunch",
+                            "amount": 25
+                        },
+                        {
+                            "date": "01.11.2021",
+                            "name": "Dinner",
+                            "amount": 35
+                        },
+                        {
+                            "date": "01.11.2021",
+                            "name": "Transport",
+                            "amount": 60
+                        }
+                    ]
+                },
+                {
+                    "email": "janedoe-bd0332b1@mailinator.com",
+                    "name": "Jane Doe",
+                    "amount_received": 100,
+                    "breakdown":[
+                        {
+                            "date": "15.10.2021",
+                            "name": "Lunch",
+                            "amount": 20
+                        },
+                        {
+                            "date": "15.11.2021",
+                            "name": "Dinner",
+                            "amount": 30
+                        },
+                        {
+                            "date": "15.11.2021",
+                            "name": "Transport",
+                            "amount": 50
+                        }
+                    ]
+                }
+            ]
+        """))
+        
+def create_sample_input_files(template_path, database_path, config_path, type):
     """Create sample template, database and server config."""
     for path in [template_path, database_path, config_path]:
         if path.exists():
@@ -193,14 +260,15 @@ def create_sample_input_files(template_path, database_path, config_path):
 
             Hi, {{name}},
 
-            Your number is {{number}}.
+            You received {{amount_received}}.
         """))
-    with database_path.open("w") as database_file:
-        database_file.write(textwrap.dedent("""\
-            email,name,number
-            myself@mydomain.com,"Myself",17
-            bob@bobdomain.com,"Bob",42
-        """))
+
+    database_path_extension = database_path.suffix
+    if database_path_extension == '.json':
+        create_sample_input_file_json_database(database_path)
+    elif database_path_extension == '.csv':
+        create_sample_input_file_csv_database(database_path)
+
     with config_path.open("w") as config_file:
         config_file.write(textwrap.dedent("""\
             # Mailmerge SMTP Server Config
