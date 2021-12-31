@@ -252,16 +252,8 @@ def create_sample_input_files(template_path, database_path, config_path, type):
     for path in [template_path, database_path, config_path]:
         if path.exists():
             sys.exit(f"Error: file exists: {path}")
-    with template_path.open("w") as template_file:
-        template_file.write(textwrap.dedent("""\
-            TO: {{email}}
-            SUBJECT: Testing mailmerge
-            FROM: My Self <myself@mydomain.com>
-
-            Hi, {{name}},
-
-            You received {{amount_received}}.
-        """))
+    
+    create_sample_input_file_mail_template(template_path)
 
     database_path_extension = database_path.suffix
     if database_path_extension == '.json':
@@ -269,6 +261,17 @@ def create_sample_input_files(template_path, database_path, config_path, type):
     elif database_path_extension == '.csv':
         create_sample_input_file_csv_database(database_path)
 
+    create_sample_input_file_config(config_path)
+
+    print(textwrap.dedent(f"""\
+        Created sample template email "{template_path}"
+        Created sample database "{database_path}"
+        Created sample config file "{config_path}"
+
+        Edit these files, then run mailmerge again.\
+    """))
+
+def create_sample_input_file_config(config_path):
     with config_path.open("w") as config_file:
         config_file.write(textwrap.dedent("""\
             # Mailmerge SMTP Server Config
@@ -283,7 +286,6 @@ def create_sample_input_files(template_path, database_path, config_path, type):
             #   security   # Security protocol: "SSL/TLS", "STARTTLS", or omit
             #   username   # Username for SSL/TLS or STARTTLS security
             #   ratelimit  # Rate limit in messages per minute, 0 for unlimited
-
             # Example: GMail
             [smtp_server]
             host = smtp.gmail.com
@@ -291,7 +293,6 @@ def create_sample_input_files(template_path, database_path, config_path, type):
             security = SSL/TLS
             username = YOUR_USERNAME_HERE
             ratelimit = 0
-
             # Example: SSL/TLS
             # [smtp_server]
             # host = smtp.mail.umich.edu
@@ -299,7 +300,6 @@ def create_sample_input_files(template_path, database_path, config_path, type):
             # security = SSL/TLS
             # username = YOUR_USERNAME_HERE
             # ratelimit = 0
-
             # Example: STARTTLS security
             # [smtp_server]
             # host = newman.eecs.umich.edu
@@ -307,20 +307,22 @@ def create_sample_input_files(template_path, database_path, config_path, type):
             # security = STARTTLS
             # username = YOUR_USERNAME_HERE
             # ratelimit = 0
-
             # Example: No security
             # [smtp_server]
             # host = newman.eecs.umich.edu
             # port = 25
             # ratelimit = 0
         """))
-    print(textwrap.dedent(f"""\
-        Created sample template email "{template_path}"
-        Created sample database "{database_path}"
-        Created sample config file "{config_path}"
 
-        Edit these files, then run mailmerge again.\
-    """))
+def create_sample_input_file_mail_template(template_path):
+    with template_path.open("w") as template_file:
+        template_file.write(textwrap.dedent("""\
+            TO: {{email}}
+            SUBJECT: Testing mailmerge
+            FROM: My Self <myself@mydomain.com>
+            Hi, {{name}},
+            You have received {{amount_received}}.
+        """))
 
 
 def read_csv_database(database_path):
