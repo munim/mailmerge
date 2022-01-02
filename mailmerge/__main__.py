@@ -8,6 +8,7 @@ import time
 import textwrap
 from pathlib import Path
 import csv
+import json
 import click
 from .template_message import TemplateMessage
 from .sendmail_client import SendmailClient
@@ -61,6 +62,10 @@ from . import exceptions
     help="server configuration (mailmerge_server.conf)",
 )
 @click.option(
+    "--json", 'json_flag', is_flag=True, default=False,
+    help="Force to use JSON file, if both CSV and JSON exists",
+)
+@click.option(
     "--output-format", "output_format",
     default="colorized",
     type=click.Choice(["colorized", "text", "raw"]),
@@ -68,7 +73,7 @@ from . import exceptions
 )
 def main(sample, sample_json, dry_run, limit, no_limit, resume,
          template_path, database_path, config_path,
-         output_format):
+         output_format, json_flag):
     """
     Mailmerge is a simple, command line mail merge tool.
 
@@ -85,7 +90,14 @@ def main(sample, sample_json, dry_run, limit, no_limit, resume,
     database_path = Path(database_path)
     config_path = Path(config_path)
     
-    if sample_json:
+    # changes the extension to .json when sample is created with 
+    # json or forcing to use json as database
+    if sample_json or json_flag:
+        database_path = database_path.with_suffix(".json")
+
+    # Change the extension to .json if .csv database if does not exists but
+    # .json database exists
+    if not database_path.exists() and database_path.with_suffix(".json").exists():
         database_path = database_path.with_suffix(".json")
 
     # Make sure input files exist and provide helpful prompts
@@ -100,10 +112,16 @@ def main(sample, sample_json, dry_run, limit, no_limit, resume,
     message_num = 1 + start
     try:
         template_message = TemplateMessage(template_path)
-        csv_database = read_csv_database(database_path)
+
+        if database_path.name.lower().endswith('json'):
+            with database_path.open() as json_file:
+                database =  iter(json.load(json_file))
+        else:
+            database = read_csv_database(database_path)
+
         sendmail_client = SendmailClient(config_path, dry_run)
 
-        for _, row in enumerate_range(csv_database, start, stop):
+        for _, row in enumerate_range(database, start, stop):
             sender, recipients, message = template_message.render(row)
             while True:
                 try:
@@ -186,7 +204,6 @@ def check_input_files(template_path, database_path, config_path, sample):
             See https://github.com/awdeorio/mailmerge for examples.\
         """))
 
-
 def create_sample_input_file_csv_database(database_path):
     with database_path.open("w") as database_file:
         database_file.write(textwrap.dedent("""\
@@ -196,7 +213,6 @@ def create_sample_input_file_csv_database(database_path):
         """))
 
 def create_sample_input_file_json_database(database_path):
-    
     with database_path.open("w") as database_file:
         database_file.write(textwrap.dedent("""\
             [
@@ -247,7 +263,7 @@ def create_sample_input_file_json_database(database_path):
             ]
         """))
         
-def create_sample_input_files(template_path, database_path, config_path, type):
+def create_sample_input_files(template_path, database_path, config_path):
     """Create sample template, database and server config."""
     for path in [template_path, database_path, config_path]:
         if path.exists():
@@ -293,6 +309,7 @@ def create_sample_input_file_config(config_path):
             security = SSL/TLS
             username = YOUR_USERNAME_HERE
             ratelimit = 0
+
             # Example: SSL/TLS
             # [smtp_server]
             # host = smtp.mail.umich.edu
@@ -300,6 +317,7 @@ def create_sample_input_file_config(config_path):
             # security = SSL/TLS
             # username = YOUR_USERNAME_HERE
             # ratelimit = 0
+
             # Example: STARTTLS security
             # [smtp_server]
             # host = newman.eecs.umich.edu
@@ -307,6 +325,7 @@ def create_sample_input_file_config(config_path):
             # security = STARTTLS
             # username = YOUR_USERNAME_HERE
             # ratelimit = 0
+            
             # Example: No security
             # [smtp_server]
             # host = newman.eecs.umich.edu
